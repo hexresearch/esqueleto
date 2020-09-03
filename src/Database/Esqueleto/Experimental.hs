@@ -608,7 +608,7 @@ from parts = do
           -- Make a fake query with the aliased results, this allows us to ensure that the query is only run once
           let aliasedQuery = Q $ W.WriterT $ pure (aliasedValue, sideData)
           -- Add the FromQuery that renders the subquery to our side data
-          subqueryAlias <- newIdentFor (DBName "q")
+          subqueryAlias <- newIdentFor (DBName "q" Nothing)
           -- Pass the aliased results of the subquery to the outer query
           -- create aliased references from the outer query results (e.g value from subquery will be `subquery`.`value`),
           -- this is probably overkill as the aliases should already be unique but seems to be good practice.
@@ -617,7 +617,7 @@ from parts = do
 
       runFrom (SqlSetOperation operation) = do
           (aliasedOperation, ret) <- aliasQueries operation
-          ident <- newIdentFor (DBName "u")
+          ident <- newIdentFor (DBName "u" Nothing)
           ref <- toAliasReference ident ret
           pure (ref, FromQuery ident $ operationToSql aliasedOperation)
 
@@ -718,14 +718,14 @@ class ToAlias a where
 instance ToAlias (SqlExpr (Value a)) where
   toAlias v@(EAliasedValue _ _) = pure v
   toAlias v = do
-    ident <- newIdentFor (DBName "v")
+    ident <- newIdentFor (DBName "v" Nothing)
     pure $ EAliasedValue ident v
 
 instance ToAlias (SqlExpr (Entity a)) where
   toAlias v@(EAliasedEntityReference _ _) = pure v
   toAlias v@(EAliasedEntity _ _) = pure v
   toAlias (EEntity tableIdent) = do
-    ident <- newIdentFor (DBName "v")
+    ident <- newIdentFor (DBName "v" Nothing)
     pure $ EAliasedEntity ident tableIdent
 
 instance ToAlias (SqlExpr (Maybe (Entity a))) where

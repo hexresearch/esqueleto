@@ -1727,7 +1727,7 @@ instance Show FromClause where
 
     where
       dummy = SqlBackend
-        { connEscapeName = \(DBName x) -> x
+        { connEscapeName = \(DBName x mschema) -> maybe "" (<> ".") mschema <> x
         }
       render' = T.unpack . renderExpr dummy
 
@@ -1922,7 +1922,7 @@ initialIdentState = IdentState mempty
 -- | Create a fresh 'Ident'.  If possible, use the given
 -- 'DBName'.
 newIdentFor :: DBName -> SqlQuery Ident
-newIdentFor (DBName original) = Q $ lift $ findFree Nothing
+newIdentFor (DBName original _) = Q $ lift $ findFree Nothing
   where
     findFree msuffix = do
       let
@@ -1941,7 +1941,7 @@ type IdentInfo = (SqlBackend, IdentState)
 
 -- | Use an identifier.
 useIdent :: IdentInfo -> Ident -> TLB.Builder
-useIdent info (I ident) = fromDBName info $ DBName ident
+useIdent info (I ident) = fromDBName info $ DBName ident Nothing
 
 
 
@@ -2180,7 +2180,7 @@ unsafeSqlBinOp op a b = unsafeSqlBinOp op (construct a) (construct b)
 --   a foreign (composite or not) key, so we enforce that it has
 --   no placeholders and split it on the commas.
 unsafeSqlBinOpComposite :: TLB.Builder -> TLB.Builder -> SqlExpr (Value a) -> SqlExpr (Value b) -> SqlExpr (Value c)
-unsafeSqlBinOpComposite op sep a b 
+unsafeSqlBinOpComposite op sep a b
     | isCompositeKey a || isCompositeKey b = ERaw Parens $ compose (listify a) (listify b)
     | otherwise = unsafeSqlBinOp op a b
   where
@@ -2769,7 +2769,7 @@ makeFrom info mode fs = ret
       in ((parens queryText) <> " AS " <> useIdent info ident, queryVals)
 
     base ident@(I identText) def =
-      let db@(DBName dbText) = entityDB def
+      let db@(DBName dbText _) = entityDB def
       in ( if dbText == identText
            then fromDBName info db
            else fromDBName info db <> (" AS " <> useIdent info ident)
@@ -2902,8 +2902,8 @@ aliasedEntityColumnIdent :: Ident -> FieldDef -> Ident
 aliasedEntityColumnIdent (I baseIdent) field =
   I (baseIdent <> "_" <> (unDBName $ fieldDB field))
 
-aliasedColumnName :: Ident -> IdentInfo -> T.Text -> TLB.Builder 
-aliasedColumnName (I baseIdent) info columnName = 
+aliasedColumnName :: Ident -> IdentInfo -> T.Text -> TLB.Builder
+aliasedColumnName (I baseIdent) info columnName =
   useIdent info (I (baseIdent <> "_" <> columnName))
 
 ----------------------------------------------------------------------
@@ -2979,7 +2979,7 @@ instance PersistEntity a => SqlSelect (SqlExpr (Entity a)) (Entity a) where
       where
         process ed = uncommas $
                      map ((name <>) . aliasName) $
-                     unescapedColumnNames ed 
+                     unescapedColumnNames ed
         aliasName columnName = (fromDBName info columnName) <> " AS " <> aliasedColumnName aliasIdent info (unDBName columnName)
         name = useIdent info tableIdent <> "."
         ret = let ed = entityDef $ getEntityVal $ return expr
@@ -2988,7 +2988,7 @@ instance PersistEntity a => SqlSelect (SqlExpr (Entity a)) (Entity a) where
       where
         process ed = uncommas $
                      map ((name <>) . aliasedColumnName baseIdent info . unDBName) $
-                     unescapedColumnNames ed 
+                     unescapedColumnNames ed
         name = useIdent info sourceIdent <> "."
         ret = let ed = entityDef $ getEntityVal $ return expr
               in (process ed, mempty)
